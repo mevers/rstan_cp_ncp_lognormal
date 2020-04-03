@@ -1,0 +1,159 @@
+---
+title: "Centred vs. non-centred parametrisation with lognormal likelihood"
+author: Maurits Evers (maurits.evers@gmail.com)
+date: 1 April 2020
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+        theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r libraries, warning=FALSE, message=FALSE}
+library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(bayesplot)
+library(gridExtra)
+```
+
+```{r custom-functions}
+plot_estimates <- function(fit, stan_data) {
+    tidy(fit, pars = "theta", conf.int = TRUE) %>%
+        bind_cols(naive = tapply(
+            stan_data$y, stan_data$grp, function(x) mean(log(x)))) %>%
+        ggplot(aes(estimate, term)) +
+        geom_linerange(
+            aes(xmin = conf.low, xmax = conf.high), colour = "orange", size = 3) +
+        geom_point(shape = 21, size = 2.5, fill = "white") +
+        geom_point(aes(naive, term), shape = 21, size = 4) +
+        geom_vline(
+            xintercept = mean(tapply(
+                stan_data$y, stan_data$grp, function(x) mean(log(x)))),
+            linetype = 3) +
+        theme_minimal()
+}
+```
+
+## Data
+
+```{r generate-data}
+# Data
+N <- c(5, 10, 20)
+mu <- c(1, 5, 2.7)
+set.seed(2020)
+grp <- rep(seq_along(N), times = N)
+y <- unlist(Map(function(n, meanlog) rlnorm(n, meanlog), N, mu))
+stan_data <- list(N = sum(N), J = length(N), y = y, grp = grp)
+```
+
+## Models {.tabset}
+
+### Centred-parametrisation
+
+$$
+\begin{aligned}
+y_i &\sim \textrm{LogNormal}(\theta_{j[i]}, \sigma^2)\,,\\
+\theta_j &\sim \textrm{Normal}(\mu_\theta, \sigma_\theta^2)
+\end{aligned}
+$$
+with priors
+$$
+\begin{aligned}
+\sigma &\sim \textrm{Cauchy}(0, 2.5)\,,\\
+\mu_\theta &\sim \textrm{Normal}(\text{mean}(\log{y}), 5)\,,\\
+\sigma_\theta &\sim \textrm{Cauchy}(0, 2.5)\,.
+\end{aligned}
+$$
+
+Model fit
+```{r cp-models}
+mod1 <- stan_model("cp_lognormal.stan")
+fit1 <- sampling(object = mod1, data = stan_data, iter = 4000, seed = 2020)
+summary(fit1, pars = c("theta", "mu_theta", "sigma_theta"))$summary
+```
+
+Parameter estimates
+```{r cp-model-estimates}
+plot_estimates(fit1, stan_data)
+```
+
+### Non-centred parametrisation
+
+$$
+\begin{aligned}
+y_i &\sim \textrm{LogNormal}(\theta_{j[i]}, \sigma^2)\,,\\
+\theta_{\text{raw}, j} &\sim \textrm{Normal}(0, 1)\\
+\theta_j &= \mu_\theta + \sigma_\theta \theta_{\text{raw}, j}
+\end{aligned}
+$$
+with priors
+$$
+\begin{aligned}
+\sigma &\sim \textrm{Cauchy}(0, 2.5)\,,\\
+\mu_\theta &\sim \textrm{Normal}(\text{mean}(\log{y}), 5)\,,\\
+\sigma_\theta &\sim \textrm{Cauchy}(0, 2.5)\,.
+\end{aligned}
+$$
+
+Model fit
+```{r ncp-model}
+mod2 <- stan_model("ncp_lognormal.stan")
+fit2 <- sampling(object = mod2, data = stan_data, iter = 4000, seed = 2020)
+summary(fit2, pars = c("theta", "mu_theta", "sigma_theta"))$summary
+```
+
+Parameter estimates
+```{r ncp-model-estimates}
+plot_estimates(fit2, stan_data)
+```
+
+## Diagnostic
+
+We use `bayesplot` to explore results.
+
+```{r bayesplot-setup}
+color_scheme_set("darkgray")
+theme_set(theme_minimal())
+
+posterior1 <- as.array(fit1)
+posterior2 <- as.array(fit2)
+lp1 <- log_posterior(fit1)
+lp2 <- log_posterior(fit2)
+np1 <- nuts_params(fit1)
+np2 <- nuts_params(fit2)
+```
+
+```{r bayesplot-parcoord}
+gg1 <- mcmc_parcoord(
+    posterior1, 
+    pars = c("theta[1]", "theta[2]", "theta[3]", "mu_theta", "sigma_theta"),
+    np = np1)
+gg2 <- mcmc_parcoord(
+    posterior2, 
+    pars = c("theta[1]", "theta[2]", "theta[3]", "mu_theta", "sigma_theta"),
+    np = np2)
+grid.arrange(gg1, gg2)
+```
+
+```{r bayesplot-pairs}
+mcmc_pairs(
+    posterior1,
+    pars = c("theta[1]", "theta[2]", "theta[3]", "mu_theta", "sigma_theta"),
+    np = np1,
+    off_diag_args = list(size = 0.75))
+mcmc_pairs(
+    posterior2,
+    pars = c("theta[1]", "theta[2]", "theta[3]", "mu_theta", "sigma_theta"),
+    np = np2,
+    off_diag_args = list(size = 0.75))
+```
