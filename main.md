@@ -1,6 +1,19 @@
-# rstan_cp_ncp_lognormal
+---
+title: "Centred vs. non-centred parametrisation with lognormal likelihood"
+author: Maurits Evers (maurits.evers@gmail.com)
+date: 1 April 2020
+output: 
+    html_document:
+        keep_md: true
+        toc: true
+        toc_float: true
+        theme: spacelab
+---
+
+
 
 ## Setup
+
 
 ```r
 library(rstan)
@@ -176,11 +189,11 @@ np2 <- nuts_params(fit2)
 
 ```r
 gg1 <- mcmc_parcoord(
-    posterior1,
+    posterior1, 
     pars = c("theta[1]", "theta[2]", "theta[3]", "mu_theta", "sigma_theta"),
     np = np1)
 gg2 <- mcmc_parcoord(
-    posterior2,
+    posterior2, 
     pars = c("theta[1]", "theta[2]", "theta[3]", "mu_theta", "sigma_theta"),
     np = np2)
 grid.arrange(gg1, gg2)

@@ -4,6 +4,7 @@ author: Maurits Evers (maurits.evers@gmail.com)
 date: 1 April 2020
 output: 
     html_document:
+        keep_md: true
         toc: true
         toc_float: true
         theme: spacelab
